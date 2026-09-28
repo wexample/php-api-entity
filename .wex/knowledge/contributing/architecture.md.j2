@@ -1,0 +1,45 @@
+## Architecture
+
+Everything lives under `Wexample\PhpApiEntity\` (PSR-4 on `src/`, declared in {{ path("composer.json") }}): `Common/` holds the classes an application extends, `Helper/` the stateless envelope and schema parsing, `Exceptions/` the two errors this layer adds. It depends on `wexample/php-api` for transport and on `wexample/php-helpers` for name conversions.
+
+### The client
+
+{{ path("src/Common/AbstractApiEntitiesClient.php") }} extends `Wexample\PhpApi\Common\AbstractApiClient`, so every request goes through php-api's `Client::request()` — options, retries and `ApiException` included. Its constructor instantiates an `ApiEntityManager` from `getRepositoryClasses()` and a fresh `ApiEntityRegistry`. A concrete client implements two abstract methods: `getRepositoryClasses()` and `getEntitySchemas()`, the schemas exported by the remote symfony-api keyed by entity name. `getRepository($entity)` accepts either an entity name or an `AbstractApiEntity` class-string.
+
+{{ path("src/Common/ApiEntityManager.php") }} owns the entity-name → repository table. At construction it calls `$repositoryClass::getEntityType()` on each repository, refuses anything not extending `AbstractApiEntity`, and indexes by `$entityType::getEntityName()`. Repositories are built lazily; an unknown name throws `InvalidArgumentException` listing the registered ones.
+
+### The path of a call
+
+`$client->getRepository(Article::class)->fetch('abc')` goes:
+
+1. `ApiEntityManager::get()` resolves the name and lazily constructs the repository with the client.
+2. {{ path("src/Common/AbstractApiRepository.php") }}`::fetch()` builds `article/show/abc` — `buildPath()` kebab-cases the entity name, `rawurlencode` protects the identifier — and calls `$this->client->requestJson(HttpMethod::GET, …)`.
+3. php-api sends it; a status `>= 400` becomes `ApiException`, the body is decoded and required to be an array.
+4. `extractPayload()` hands the response to `ApiEnvelopeHelper::unwrap()`, which throws `ApiEnvelopeException` on `type === 'error'` (message = the server error key, e.g. `ERR_INVALID_CREDENTIALS`) or on a missing `data`, and returns `$response['data']` otherwise. `fetchList()` adds `extractItems()`, requiring an `items` array.
+5. `hydrateFromApiItem()` splits the item into `[entity, metadata, relationships]`, rejecting anything without a string `type` and an `entity` object, then checks `type` equals this repository's entity name.
+6. `createFromApiItem()` hydrates: `fromArray()`, schema lookup, `validateExtraFields()`, `hydrateEntityFields()`, the identifier, `setMetadata()`, registration in the registry, then `setRelationships()`.
+
+### Schema-driven hydration
+
+A schema is an array holding `properties` entries of `{name, type, nullable, target}`. Hydration is strict in both directions: {{ path("src/Helper/SchemaHelper.php") }}`::assertAllowedFields()` throws on any field the schema does not declare (only `id` is whitelisted), and a non-nullable property arriving as `null` throws `ApiSchemaException::nonNullableNull()`. Values are cast by declared type — `int`, `float`, `bool`, `string`, `datetime` to `DateTimeImmutable`. Assignment tries a declared property first through reflection, then the generated setter, then gives up with `ApiSchemaException::propertyNotFound()`.
+
+{{ path("src/Common/AbstractApiEntity.php") }} is deliberately thin: an `id`, plus `metadata`, `relationships`, `values` and `relationshipMap` arrays. Reads go through `__get()` and `__call()`, which look in `values`, then `relationshipMap`, then the relationships matched by name; `set*()` writes into `values`. An entity declaring no property still answers `$entity->getTitle()`.
+
+### Relationships and stubs
+
+`buildRelationshipsForEntity()` walks the schema for properties typed `relation` (one linked entity) or `collection` (many) and resolves each value:
+
+- an inline array is hydrated by the target's own repository, recursively;
+- a string found as a key in the item's `relationships` side-load is hydrated the same way;
+- a bare string id becomes an {{ path("src/Common/ApiEntityStub.php") }} — `isStub() === true`, with a `targetName`.
+
+{{ path("src/Common/ApiEntityRegistry.php") }} indexes hydrated entities by entity name and id. `registerStub()` swaps a stub immediately when the real entity is already known, otherwise queues it under a `WeakReference` to its owner; the next `registerEntity()` with that id calls `$owner->replaceRelationship($stub, $entity)` on everyone waiting. The weak reference keeps the registry from pinning entities in memory; the registry itself lives as long as the client.
+
+Relationships are stored twice — a flat list and a `relationshipMap` keyed by property name — which is why `$article->author` returns one entity for a `relation` and an array for a `collection`.
+
+### Errors
+
+On top of php-api's `ApiException` (transport and HTTP status), this layer adds two:
+
+- {{ path("src/Exceptions/ApiEnvelopeException.php") }} for a malformed or `type: error` envelope, carrying `getResponseCode()` and the full `getEnvelope()`;
+- {{ path("src/Exceptions/ApiSchemaException.php") }} for anything that fails hydration, with a stable vocabulary exposed by `getErrorCode()` — `CODE_UNKNOWN_FIELD`, `CODE_PROPERTY_NOT_FOUND`, `CODE_NON_NULLABLE_NULL`, `CODE_INVALID_VALUE`, `CODE_INVALID_ITEM`, `CODE_UNKNOWN_RELATIONSHIP` — and named factories that always report the owning entity and field. A schema exception means the API contract drifted; the client is not meant to tolerate it.
