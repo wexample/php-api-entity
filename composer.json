@@ -3,7 +3,7 @@
   "description": "Client-side entities, repositories and envelope for APIs served by wexample/symfony-api",
   "type": "library",
   "license": "MIT",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "authors": [
     {
       "name": "Wexample",
