@@ -296,11 +296,17 @@ abstract class AbstractApiRepository
         SchemaHelper::assertAllowedFields($data, $schema, ['id']);
     }
 
+    /**
+     * Some payloads name their entities by another field only (a secureId):
+     * the entity is then left without an id rather than given an empty one.
+     */
     protected function hydrateEntityIdentifier(
         AbstractApiEntity $entity,
         array $data
     ): void {
-        $this->assignPropertyValue($entity, 'id', (string) $data['id']);
+        if (isset($data['id'])) {
+            $this->assignPropertyValue($entity, 'id', (string) $data['id']);
+        }
     }
 
     protected function assignPropertyValue(
