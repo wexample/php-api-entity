@@ -1,6 +1,6 @@
 # php-api-entity
 
-Version: 2.0.2
+Version: 2.0.3
 
 `wexample/php-api-entity` is the PHP client side of the convention `wexample/symfony-api` serves: responses wrapped in a `{type, code, message?, data}` envelope, items shaped `{type, entity, metadata?, relationships?}`, and entity schemas describing each field. A client extends src/Common/AbstractApiEntitiesClient.php, declares its repositories and schemas, and gets back `AbstractApiEntity` objects validated field by field, with their relationships resolved.
 
