@@ -1,0 +1,40 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+// The entity and repository classes of a client package, from its
+// data/entity/*.yml: generate-api-entities <package-dir> [--abstract-entity=<class>]
+
+require_once dirname(__DIR__) . '/src/Generator/ApiEntityClassGenerator.php';
+
+use Wexample\PhpApiEntity\Generator\ApiEntityClassGenerator;
+
+$packageDir = null;
+$abstractEntityClass = null;
+
+foreach (array_slice($argv, 1) as $argument) {
+    if (str_starts_with($argument, '--abstract-entity=')) {
+        $abstractEntityClass = substr($argument, strlen('--abstract-entity='));
+    } else {
+        $packageDir = $argument;
+    }
+}
+
+if (null === $packageDir) {
+    fwrite(STDERR, "Usage: generate-api-entities <package-dir> [--abstract-entity=<class>]\n");
+    exit(1);
+}
+
+try {
+    $report = (new ApiEntityClassGenerator(rtrim($packageDir, '/'), $abstractEntityClass))->generate();
+} catch (RuntimeException $exception) {
+    fwrite(STDERR, 'Error: ' . $exception->getMessage() . "\n");
+    exit(1);
+}
+
+foreach ($report['created'] as $path) {
+    echo "Created {$path}\n";
+}
+
+echo sprintf("Done: created=%d, skipped=%d\n", count($report['created']), $report['skipped']);
