@@ -1,6 +1,6 @@
 # php-api-entity
 
-Version: 2.0.5
+Version: 3.0.0
 
 Client-side entities, repositories and envelope for APIs served by wexample/symfony-api
 
