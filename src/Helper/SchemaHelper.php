@@ -47,7 +47,9 @@ final class SchemaHelper
         string $entityName,
         string $propertyName
     ): mixed {
-        if (TextHelper::isNullOrNullString($value)) {
+        // A text property keeps the text it was sent, `"null"` included: a
+        // title or a name may read so, and only a JSON null empties it.
+        if ($type === 'string' ? $value === null : TextHelper::isNullOrNullString($value)) {
             return null;
         }
 
@@ -88,7 +90,8 @@ final class SchemaHelper
         }
 
         if ($value instanceof \DateTimeInterface) {
-            return new \DateTimeImmutable($value->format(\DateTimeInterface::ATOM));
+            // Formatting through ATOM would drop the microseconds.
+            return \DateTimeImmutable::createFromInterface($value);
         }
 
         try {
