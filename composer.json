@@ -3,7 +3,7 @@
   "description": "Client-side entities, repositories and envelope for APIs served by wexample/symfony-api",
   "type": "library",
   "license": "MIT",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "authors": [
     {
       "name": "Wexample",
@@ -13,8 +13,8 @@
   "minimum-stability": "stable",
   "require": {
     "php": ">=8.5",
-    "wexample/php-api": ">=5.0.6",
-    "wexample/php-helpers": ">=7.0.4",
+    "wexample/php-api": ">=5.1.0",
+    "wexample/php-helpers": ">=8.0.0",
     "symfony/yaml": "^7.0|^8.0"
   },
   "require-dev": {
